@@ -1,0 +1,389 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>타이머 웹 페이지</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Arial, sans-serif;
+            background: #111;
+            min-height: 100vh;
+            margin: 0;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+        }
+        .main-layout {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            width: 100vw;
+            min-height: 100vh;
+        }
+        .timer-container {
+            background: #fff;
+            padding: 48px 36px 36px 36px;
+            border-radius: 24px;
+            box-shadow: 0 8px 32px rgba(0,0,0,0.12);
+            text-align: center;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            min-width: 270px;
+            margin: 0 auto;
+            min-height: 350px;
+            transition: background 0.3s;
+        }
+        .clock {
+            position: relative;
+            width: 220px;
+            height: 220px;
+            background: #fff;
+            border: 8px solid #b2c9e6;
+            border-radius: 50%;
+            box-shadow: 0 4px 24px rgba(0,0,0,0.10);
+            margin-bottom: 32px;
+            transition: background 0.3s, border 0.3s;
+        }
+        /* 검색 관련 스타일 삭제 */
+        /* 자리 랜덤배치 관련 스타일 삭제 */
+        .hand {
+            position: absolute;
+            left: 50%;
+            bottom: 50%;
+            transform-origin: bottom center;
+            background: #3a4a6b;
+            border-radius: 6px;
+        }
+        .hand.hour {
+            width: 10px;
+            height: 60px;
+            background: #3a4a6b;
+            z-index: 3;
+        }
+        .hand.minute {
+            width: 6px;
+            height: 85px;
+            background: #5b7bb2;
+            z-index: 2;
+        }
+        .hand.second {
+            width: 3px;
+            height: 100px;
+            background: #e74c3c;
+            z-index: 4;
+        }
+        .center-dot {
+            position: absolute;
+            left: 50%;
+            top: 50%;
+            width: 18px;
+            height: 18px;
+            background: #3a4a6b;
+            border-radius: 50%;
+            transform: translate(-50%, -50%);
+            z-index: 10;
+            border: 3px solid #fff;
+        }
+        .clock-numbers {
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            left: 0;
+            top: 0;
+            pointer-events: none;
+        }
+        .clock-number {
+            position: absolute;
+            font-size: 1.2rem;
+            color: #3a4a6b;
+            font-weight: bold;
+            user-select: none;
+            transition: color 0.3s;
+        }
+        .digital-timer {
+            font-size: 2rem;
+            color: #3a4a6b;
+            margin-bottom: 18px;
+            letter-spacing: 2px;
+            font-family: 'Consolas', 'Courier New', monospace;
+            transition: color 0.3s;
+        }
+        .theme-btn {
+            position: fixed;
+            left: 50%;
+            bottom: 48px;
+            transform: translateX(-50%);
+            padding: 14px 36px;
+            font-size: 1.2rem;
+            border: none;
+            border-radius: 12px;
+            background: linear-gradient(90deg, #222 0%, #444 100%);
+            color: #fff;
+            cursor: pointer;
+            box-shadow: 0 2px 12px rgba(0,0,0,0.18);
+            transition: background 0.2s, color 0.2s, transform 0.1s;
+            z-index: 100;
+        }
+        .theme-btn:hover {
+            background: linear-gradient(90deg, #444 0%, #222 100%);
+            color: #fff;
+            transform: translateX(-50%) scale(1.04);
+        }
+    </style>
+</head>
+<body>
+    <div class="main-layout">
+        <div class="timer-container" id="featureContainer">
+            <!-- 기능별 UI가 여기에 동적으로 들어감 -->
+        </div>
+        <button class="theme-btn" id="themeBtn" onclick="nextFeature()">전환 버튼</button>
+    </div>
+    <script>
+
+
+        // 기능 상태: 0=시계, 1=타이머, 2=스톱워치
+        let featureIndex = 0;
+        const featureContainer = document.getElementById('featureContainer');
+        // 시계
+        let clockInterval = null;
+        // 타이머
+        let timerInterval = null;
+        let timerInputSeconds = 0;
+        let timerSecondsLeft = 0;
+        let timerRunning = false;
+        // 스톱워치
+        let stopwatchInterval = null;
+        let stopwatchElapsed = 0;
+        let stopwatchRunning = false;
+
+        function renderFeature() {
+            clearIntervals();
+            featureContainer.innerHTML = '';
+            if (featureIndex === 0) {
+                // 시계
+                featureContainer.innerHTML = `
+                    <div class="clock" id="clockBg">
+                        <div class="hand hour" id="hourHand"></div>
+                        <div class="hand minute" id="minuteHand"></div>
+                        <div class="hand second" id="secondHand"></div>
+                        <div class="center-dot"></div>
+                        <div class="clock-numbers" id="clockNumbers"></div>
+                    </div>
+                    <div class="digital-timer" id="timer">00:00:00</div>
+                `;
+                renderClockNumbers();
+                updateClock();
+                clockInterval = setInterval(updateClock, 1000);
+            } else if (featureIndex === 1) {
+                // 타이머 (카운트다운, 입력) - 진입 시 완전 초기화
+                timerInputSeconds = 0;
+                timerSecondsLeft = 0;
+                timerRunning = false;
+                featureContainer.innerHTML = `
+                    <div style="margin-bottom:18px;font-size:1.2rem;color:#3a4a6b;font-weight:bold;">타이머</div>
+                    <div style="margin-bottom:12px;">
+                        <input id="timerInput" type="number" min="1" max="359999" placeholder="초 단위 입력" value="" style="width:120px;padding:6px 8px;font-size:1rem;border:1px solid #b2c9e6;border-radius:6px;outline:none;" />
+                        <button onclick="setTimer()" style="margin-left:8px;">설정</button>
+                    </div>
+                    <div class="digital-timer" id="timer">00:00:00</div>
+                    <div style="margin:18px 0;">
+                        <button onclick="startTimer()" style="margin-right:8px;">시작</button>
+                        <button onclick="pauseTimer()" style="margin-right:8px;">일시정지</button>
+                        <button onclick="resetTimer()">초기화</button>
+                    </div>
+                `;
+                updateTimerDisplay();
+            } else if (featureIndex === 2) {
+                // 스톱워치 (1/100초 단위) - 진입 시 완전 초기화
+                stopwatchElapsed = 0;
+                stopwatchRunning = false;
+                featureContainer.innerHTML = `
+                    <div style="margin-bottom:18px;font-size:1.2rem;color:#3a4a6b;font-weight:bold;">스톱워치</div>
+                    <div class="digital-timer" id="timer">00:00:00.00</div>
+                    <div style="margin:18px 0;">
+                        <button onclick="startStopwatch()" style="margin-right:8px;">시작</button>
+                        <button onclick="pauseStopwatch()" style="margin-right:8px;">일시정지</button>
+                        <button onclick="resetStopwatch()">초기화</button>
+                    </div>
+                `;
+                updateStopwatchDisplay();
+            }
+        }
+
+        function nextFeature() {
+            featureIndex = (featureIndex + 1) % 3;
+            renderFeature();
+        }
+
+        // 시계
+        function updateClock() {
+            const now = new Date();
+            const hours = now.getHours();
+            const minutes = now.getMinutes();
+            const seconds = now.getSeconds();
+            const timer = document.getElementById('timer');
+            if (timer) timer.textContent = `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
+            // 아날로그 시계 바늘 회전
+            const hourDeg = ((hours % 12) + minutes / 60) * 30;
+            const minuteDeg = (minutes + seconds / 60) * 6;
+            const secondDeg = seconds * 6;
+            const hourHand = document.getElementById('hourHand');
+            const minuteHand = document.getElementById('minuteHand');
+            const secondHand = document.getElementById('secondHand');
+            if (hourHand) hourHand.style.transform = `translate(-50%, 0) rotate(${hourDeg}deg)`;
+            if (minuteHand) minuteHand.style.transform = `translate(-50%, 0) rotate(${minuteDeg}deg)`;
+            if (secondHand) secondHand.style.transform = `translate(-50%, 0) rotate(${secondDeg}deg)`;
+        }
+
+        function renderClockNumbers() {
+            const numbers = document.getElementById('clockNumbers');
+            if (!numbers) return;
+            numbers.innerHTML = '';
+            const radius = 85;
+            const center = 110;
+            const numberSize = 28;
+            for (let n = 1; n <= 12; n++) {
+                const angle = (n - 3) * 30 * Math.PI / 180;
+                const x = center + radius * Math.cos(angle) - numberSize / 2;
+                const y = center + radius * Math.sin(angle) - numberSize / 2;
+                const num = document.createElement('div');
+                num.className = 'clock-number';
+                num.style.left = `${x}px`;
+                num.style.top = `${y}px`;
+                num.style.width = `${numberSize}px`;
+                num.style.height = `${numberSize}px`;
+                num.style.display = 'flex';
+                num.style.alignItems = 'center';
+                num.style.justifyContent = 'center';
+                num.textContent = n;
+                numbers.appendChild(num);
+            }
+        }
+
+        // 타이머 (카운트다운)
+        function setTimer() {
+            const input = document.getElementById('timerInput');
+            if (!input) return;
+            const value = Number(input.value);
+            if (isNaN(value) || value < 1) {
+                alert('1초 이상 입력하세요.');
+                return;
+            }
+            timerInputSeconds = value;
+            timerSecondsLeft = value;
+            updateTimerDisplay();
+        }
+        function updateTimerDisplay() {
+            const timer = document.getElementById('timer');
+            if (timer) {
+                const hours = Math.floor(timerSecondsLeft / 3600);
+                const minutes = Math.floor((timerSecondsLeft % 3600) / 60);
+                const seconds = timerSecondsLeft % 60;
+                timer.textContent = `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
+            }
+        }
+        function startTimer() {
+            if (timerRunning || timerSecondsLeft <= 0) return;
+            timerRunning = true;
+            updateTimerDisplay();
+            timerInterval = setInterval(() => {
+                if (timerSecondsLeft > 0) {
+                    timerSecondsLeft--;
+                    updateTimerDisplay();
+                    if (timerSecondsLeft === 0) {
+                        clearInterval(timerInterval);
+                        timerRunning = false;
+                        alert('타이머 종료!');
+                    }
+                }
+            }, 1000);
+        }
+        function pauseTimer() {
+            timerRunning = false;
+            clearInterval(timerInterval);
+        }
+        function resetTimer() {
+            timerRunning = false;
+            clearInterval(timerInterval);
+            timerSecondsLeft = timerInputSeconds;
+            updateTimerDisplay();
+        }
+
+        // 스톱워치 (1/100초)
+        function updateStopwatchDisplay() {
+            const timer = document.getElementById('timer');
+            if (timer) {
+                const hours = Math.floor(stopwatchElapsed / 360000);
+                const minutes = Math.floor((stopwatchElapsed % 360000) / 6000);
+                const seconds = Math.floor((stopwatchElapsed % 6000) / 100);
+                const ms = stopwatchElapsed % 100;
+                timer.textContent = `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}.${String(ms).padStart(2, '0')}`;
+            }
+        }
+        function startStopwatch() {
+            if (stopwatchRunning) return;
+            stopwatchRunning = true;
+            stopwatchInterval = setInterval(() => {
+                stopwatchElapsed++;
+                updateStopwatchDisplay();
+            }, 10);
+        }
+        function pauseStopwatch() {
+            stopwatchRunning = false;
+            clearInterval(stopwatchInterval);
+        }
+        function resetStopwatch() {
+            stopwatchRunning = false;
+            clearInterval(stopwatchInterval);
+            stopwatchElapsed = 0;
+            updateStopwatchDisplay();
+        }
+
+        function clearIntervals() {
+            clearInterval(timerInterval);
+            clearInterval(stopwatchInterval);
+            clearInterval(clockInterval);
+            timerRunning = false;
+            stopwatchRunning = false;
+        }
+
+        // 최초 렌더링
+        renderFeature();
+
+        // 시계 숫자 위치 자동 배치
+        window.addEventListener('DOMContentLoaded', () => {
+            const numbers = document.getElementById('clockNumbers');
+            const radius = 85; // 숫자가 더 안쪽에 오도록 반지름 축소
+            const center = 110; // 시계 중심(px)
+            const numberSize = 28; // 숫자 박스 크기(폰트+여백)
+            for (let n = 1; n <= 12; n++) {
+                const angle = (n - 3) * 30 * Math.PI / 180;
+                const x = center + radius * Math.cos(angle) - numberSize / 2;
+                const y = center + radius * Math.sin(angle) - numberSize / 2;
+                const num = document.createElement('div');
+                num.className = 'clock-number';
+                num.style.left = `${x}px`;
+                num.style.top = `${y}px`;
+                num.style.width = `${numberSize}px`;
+                num.style.height = `${numberSize}px`;
+                num.style.display = 'flex';
+                num.style.alignItems = 'center';
+                num.style.justifyContent = 'center';
+                num.textContent = n;
+                numbers.appendChild(num);
+            }
+        });
+
+
+
+
+
+
+        // updateDisplay(); // 시계는 updateClock으로 대체
+    </script>
+</body>
+</html>
